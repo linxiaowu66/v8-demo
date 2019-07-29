@@ -17,8 +17,8 @@
  * For a more sophisticated shell, consider using the debug shell D8.
  */
 v8::Local<v8::Context> CreateShellContext(v8::Isolate* isolate);
-void VersionGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& info);
-void VersionSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value>& info);
+// void VersionGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& info);
+// void VersionSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value>& info);
 void RunShell(v8::Local<v8::Context> context, v8::Platform* platform);
 extern bool ExecuteString(v8::Isolate* isolate, v8::Local<v8::String> source,
                    v8::Local<v8::Value> name, bool print_result,
@@ -67,6 +67,17 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
+void VersionGetter(v8::Local<v8::String> property,
+                   const v8::PropertyCallbackInfo<v8::Value>& info) {
+    info.GetReturnValue().Set(v8::String::NewFromUtf8(info.GetIsolate(), version).ToLocalChecked());
+}
+
+void VersionSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void>& info) {
+    v8::String::Utf8Value str(info.GetIsolate(), value);
+    const char* result = ToCString(str);
+    strncpy(version, result, sizeof(version));
+}
+
 // Creates a new execution environment containing the built-in
 // functions.
 v8::Local<v8::Context> CreateShellContext(v8::Isolate* isolate) {
@@ -91,18 +102,9 @@ v8::Local<v8::Context> CreateShellContext(v8::Isolate* isolate) {
             isolate, "quit", v8::NewStringType::kNormal).ToLocalChecked(),
                 v8::FunctionTemplate::New(isolate, Quit));
 
-    global->SetAccessor(v8::String::NewFromUtf8(isolate, "version", v8::NewStringType::kInternalized).ToLocalChecked(), VersionGetter, VersionSetter);
+    global->SetAccessor(v8::String::NewFromUtf8(isolate, "version").ToLocalChecked(), &VersionGetter, &VersionSetter);
 
     return v8::Context::New(isolate, NULL, global);
-}
-
-void VersionGetter(v8::Local<v8::String> property,
-                   const v8::PropertyCallbackInfo<v8::Value>& info) {
-    info.GetReturnValue().Set(version);
-}
-
-void VersionSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<v8::Value>& info) {
-    strncpy(version, value->, sizeof(version));
 }
 
 
