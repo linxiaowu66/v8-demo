@@ -5,33 +5,59 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <map>
 
 #include "./shell.h"
 
+using std::map;
+using std::string;
+using v8::Isolate;
+using v8::String;
+using v8::Local;
+using v8::TryCatch;
+using v8::HandleScope;
+using v8::Context;
+using v8::Script;
+using v8::Message;
+using v8::ScriptOrigin;
+using v8::MaybeLocal;
+using v8::Value;
+using v8::NewStringType;
+using v8::Platform;
+using v8::External;
+using v8::Object;
+
 // Extracts a C string from a V8 Utf8Value.
-const char* ToCString(const v8::String::Utf8Value& value) {
+const char* ToCString(const String::Utf8Value& value) {
     return *value ? *value : "<string conversion failed>";
 }
 
-void ReportException(v8::Isolate* isolate, v8::TryCatch* try_catch) {
-    v8::HandleScope handle_scope(isolate);
-    v8::String::Utf8Value exception(isolate, try_catch->Exception());
+// Convert a JavaScript string to a std::string.  To not bother too
+// much with string encodings we just use ascii.
+string ObjectToString(Isolate* isolate, Local<Value> value) {
+  String::Utf8Value utf8_value(isolate, value);
+  return string(*utf8_value);
+}
+
+void ReportException(Isolate* isolate, TryCatch* try_catch) {
+    HandleScope handle_scope(isolate);
+    String::Utf8Value exception(isolate, try_catch->Exception());
     const char* exception_string = ToCString(exception);
-    v8::Local<v8::Message> message = try_catch->Message();
+    Local<Message> message = try_catch->Message();
     if (message.IsEmpty()) {
         // V8 didn't provide any extra information about this error; just
         // print the exception.
         fprintf(stderr, "%s\n", exception_string);
     } else {
         // Print (filename):(line number): (message).
-        v8::String::Utf8Value filename(isolate,
+        String::Utf8Value filename(isolate,
                                        message->GetScriptOrigin().ResourceName());
-        v8::Local<v8::Context> context(isolate->GetCurrentContext());
+        Local<Context> context(isolate->GetCurrentContext());
         const char* filename_string = ToCString(filename);
         int linenum = message->GetLineNumber(context).FromJust();
         fprintf(stderr, "%s:%i: %s\n", filename_string, linenum, exception_string);
         // Print line of source code.
-        v8::String::Utf8Value sourceline(
+        String::Utf8Value sourceline(
                 isolate, message->GetSourceLine(context).ToLocalChecked());
         const char* sourceline_string = ToCString(sourceline);
         fprintf(stderr, "%s\n", sourceline_string);
@@ -45,11 +71,11 @@ void ReportException(v8::Isolate* isolate, v8::TryCatch* try_catch) {
             fprintf(stderr, "^");
         }
         fprintf(stderr, "\n");
-        v8::Local<v8::Value> stack_trace_string;
+        Local<Value> stack_trace_string;
         if (try_catch->StackTrace(context).ToLocal(&stack_trace_string) &&
             stack_trace_string->IsString() &&
-            v8::Local<v8::String>::Cast(stack_trace_string)->Length() > 0) {
-            v8::String::Utf8Value stack_trace(isolate, stack_trace_string);
+            Local<String>::Cast(stack_trace_string)->Length() > 0) {
+            String::Utf8Value stack_trace(isolate, stack_trace_string);
             const char* stack_trace_string = ToCString(stack_trace);
             fprintf(stderr, "%s\n", stack_trace_string);
         }
@@ -57,21 +83,21 @@ void ReportException(v8::Isolate* isolate, v8::TryCatch* try_catch) {
 }
 
 // Executes a string within the current v8 context.
-bool ExecuteString(v8::Isolate* isolate, v8::Local<v8::String> source,
-                   v8::Local<v8::Value> name, bool print_result,
+bool ExecuteString(Isolate* isolate, Local<String> source,
+                   Local<Value> name, bool print_result,
                    bool report_exceptions) {
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    v8::ScriptOrigin origin(name);
-    v8::Local<v8::Context> context(isolate->GetCurrentContext());
-    v8::Local<v8::Script> script;
-    if (!v8::Script::Compile(context, source, &origin).ToLocal(&script)) {
+    HandleScope handle_scope(isolate);
+    TryCatch try_catch(isolate);
+    ScriptOrigin origin(name);
+    Local<Context> context(isolate->GetCurrentContext());
+    Local<Script> script;
+    if (!Script::Compile(context, source, &origin).ToLocal(&script)) {
         // Print errors that happened during compilation.
         if (report_exceptions)
             ReportException(isolate, &try_catch);
         return false;
     } else {
-        v8::Local<v8::Value> result;
+        Local<Value> result;
         if (!script->Run(context).ToLocal(&result)) {
             assert(try_catch.HasCaught());
             // Print errors that happened during execution.
@@ -83,7 +109,7 @@ bool ExecuteString(v8::Isolate* isolate, v8::Local<v8::String> source,
             if (print_result && !result->IsUndefined()) {
                 // If all went well and the result wasn't undefined then print
                 // the returned value.
-                v8::String::Utf8Value str(isolate, result);
+                String::Utf8Value str(isolate, result);
                 const char* cstr = ToCString(str);
                 printf("%s\n", cstr);
             }
@@ -93,9 +119,9 @@ bool ExecuteString(v8::Isolate* isolate, v8::Local<v8::String> source,
 }
 
 // Reads a file into a v8 string.
-v8::MaybeLocal<v8::String> ReadFile(v8::Isolate *isolate, const char *name) {
+MaybeLocal<String> ReadFile(Isolate *isolate, const char *name) {
   FILE *file = fopen(name, "rb");
-  if (file == NULL) return v8::MaybeLocal<v8::String>();
+  if (file == NULL) return MaybeLocal<String>();
   fseek(file, 0, SEEK_END);
   size_t size = ftell(file);
   rewind(file);
@@ -105,38 +131,46 @@ v8::MaybeLocal<v8::String> ReadFile(v8::Isolate *isolate, const char *name) {
     i += fread(&chars[i], 1, size - i, file);
     if (ferror(file)) {
       fclose(file);
-      return v8::MaybeLocal<v8::String>();
+      return MaybeLocal<String>();
     }
   }
   fclose(file);
-  v8::MaybeLocal<v8::String> result = v8::String::NewFromUtf8(
-      isolate, chars, v8::NewStringType::kNormal, static_cast<int>(size));
+  MaybeLocal<String> result = String::NewFromUtf8(
+      isolate, chars, NewStringType::kNormal, static_cast<int>(size));
   delete[] chars;
   return result;
 }
 
 // The read-eval-execute loop of the shell.
-void RunShell(v8::Local<v8::Context> context, v8::Platform *platform) {
+void RunShell(Local<Context> context, Platform *platform) {
   fprintf(stderr, "V8 version %s [sample shell]\n", v8::V8::GetVersion());
   static const int kBufferSize = 256;
   // Enter the execution environment before evaluating any code.
-  v8::Context::Scope context_scope(context);
-  v8::Local<v8::String> name(
-      v8::String::NewFromUtf8(context->GetIsolate(), "(shell)",
-                              v8::NewStringType::kNormal).ToLocalChecked());
+  Context::Scope context_scope(context);
+  Local<String> name(
+      String::NewFromUtf8(context->GetIsolate(), "(shell)",
+                              NewStringType::kNormal).ToLocalChecked());
   while (true) {
     char buffer[kBufferSize];
     fprintf(stderr, "> ");
     char *str = fgets(buffer, kBufferSize, stdin);
     if (str == NULL) break;
-    v8::HandleScope handle_scope(context->GetIsolate());
+    HandleScope handle_scope(context->GetIsolate());
     ExecuteString(
         context->GetIsolate(),
-        v8::String::NewFromUtf8(context->GetIsolate(), str,
-                                v8::NewStringType::kNormal).ToLocalChecked(),
+        String::NewFromUtf8(context->GetIsolate(), str,
+                                NewStringType::kNormal).ToLocalChecked(),
         name, true, true);
     while (v8::platform::PumpMessageLoop(platform, context->GetIsolate()))
       continue;
   }
   fprintf(stderr, "\n");
+}
+
+// Utility function that extracts the C++ map pointer from a wrapper
+// object.
+map<string, string>* UnwrapMap(Local<Object> obj) {
+  Local<External> field = Local<External>::Cast(obj->GetInternalField(0));
+  void* ptr = field->Value();
+  return static_cast<map<string, string>*>(ptr);
 }

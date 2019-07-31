@@ -11,6 +11,26 @@
 #include <string.h>
 #include "shell.h"
 
+using v8::Context;
+using v8::External;
+using v8::FunctionTemplate;
+using v8::HandleScope;
+using v8::Isolate;
+using v8::Local;
+using v8::Name;
+using v8::NamedPropertyHandlerConfiguration;
+using v8::NewStringType;
+using v8::Object;
+using v8::ObjectTemplate;
+using v8::PropertyCallbackInfo;
+using v8::String;
+using v8::TryCatch;
+using v8::Value;
+using v8::FunctionCallbackInfo;
+using v8::V8;
+using v8::ArrayBuffer;
+using v8::Handle;
+using v8::Platform;
 /**
  * This sample program shows how to implement a simple javascript shell
  * based on V8.  This includes initializing V8 with command line options,
@@ -18,125 +38,137 @@
  *
  * For a more sophisticated shell, consider using the debug shell D8.
  */
-extern void VersionGetter(v8::Local<v8::String> property, const v8::PropertyCallbackInfo<v8::Value>& info);
-extern void VersionSetter(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void> &info);
-extern void PointMulti(const v8::FunctionCallbackInfo <v8::Value> &args);
-extern void GetPointX(v8::Local<v8::String> property,
-               const v8::PropertyCallbackInfo<v8::Value> &info);
-extern void SetPointX(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void> &info);
-extern void GetPointY(v8::Local<v8::String> property,
-                      const v8::PropertyCallbackInfo<v8::Value> &info);
-extern void SetPointY(v8::Local<v8::String> property, v8::Local<v8::Value> value, const v8::PropertyCallbackInfo<void> &info);
-extern void Print(const v8::FunctionCallbackInfo<v8::Value> &args);
-extern void Load(const v8::FunctionCallbackInfo<v8::Value> &args);
-extern void Quit(const v8::FunctionCallbackInfo<v8::Value> &args);
-extern void constructPoint(const v8::FunctionCallbackInfo <v8::Value> &args);
-extern void ReportException(v8::Isolate *isolate, v8::TryCatch *handler);
+extern void VersionGetter(Local<String> property, const PropertyCallbackInfo<Value>& info);
+extern void VersionSetter(Local<String> property, Local<Value> value, const PropertyCallbackInfo<void> &info);
+extern void PointMulti(const FunctionCallbackInfo <Value> &args);
+extern void PointInterceptorGetter(Local<Name> name, const PropertyCallbackInfo<Value>& info);
+extern void PointInterceptorSetter(Local<Name> name, Local<Value> value,
+                                   const PropertyCallbackInfo<Value>& info);
+extern void GetPointX(Local<String> property,
+               const PropertyCallbackInfo<Value> &info);
+extern void SetPointX(Local<String> property, Local<Value> value, const PropertyCallbackInfo<void> &info);
+extern void GetPointY(Local<String> property,
+                      const PropertyCallbackInfo<Value> &info);
+extern void SetPointY(Local<String> property, Local<Value> value, const PropertyCallbackInfo<void> &info);
+extern void Print(const FunctionCallbackInfo<Value> &args);
+extern void Load(const FunctionCallbackInfo<Value> &args);
+extern void Quit(const FunctionCallbackInfo<Value> &args);
+extern void constructPoint(const FunctionCallbackInfo <Value> &args);
+extern void ReportException(Isolate *isolate, TryCatch *handler);
 
-extern const char *ToCString(const v8::String::Utf8Value &value);
+extern const char *ToCString(const String::Utf8Value &value);
 
-void RunShell(v8::Local<v8::Context> context, v8::Platform *platform);
-v8::Local<v8::Context> CreateShellContext(v8::Isolate *isolate);
+void RunShell(Local<Context> context, Platform *platform);
+Local<Context> CreateShellContext(Isolate *isolate);
 
 
 int main(int argc, char *argv[]) {
   // 初始化v8
-  v8::V8::InitializeICUDefaultLocation(argv[0]);
-  v8::V8::InitializeExternalStartupData(argv[0]);
-  std::unique_ptr<v8::Platform> platform = v8::platform::NewDefaultPlatform();
-  v8::V8::InitializePlatform(platform.get());
-  v8::V8::Initialize();
-  v8::V8::SetFlagsFromCommandLine(&argc, argv, true);
-  v8::Isolate::CreateParams create_params;
+  V8::InitializeICUDefaultLocation(argv[0]);
+  V8::InitializeExternalStartupData(argv[0]);
+  std::unique_ptr<Platform> platform = v8::platform::NewDefaultPlatform();
+  V8::InitializePlatform(platform.get());
+  V8::Initialize();
+  V8::SetFlagsFromCommandLine(&argc, argv, true);
+  Isolate::CreateParams create_params;
   create_params.array_buffer_allocator =
-      v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+      ArrayBuffer::Allocator::NewDefaultAllocator();
 
-  v8::Isolate *isolate = v8::Isolate::New(create_params);
+  Isolate *isolate = Isolate::New(create_params);
   {
-    v8::Isolate::Scope isolate_scope(isolate);
-    v8::HandleScope handle_scope(isolate);
+    Isolate::Scope isolate_scope(isolate);
+    HandleScope handle_scope(isolate);
 
     // 初始化version
-    strncpy(version, v8::V8::GetVersion(), sizeof(version));
+    strncpy(version, V8::GetVersion(), sizeof(version));
 
-    v8::Local<v8::Context> context = CreateShellContext(isolate);
+    Local<Context> context = CreateShellContext(isolate);
     if (context.IsEmpty()) {
       fprintf(stderr, "Error creating context\n");
       return 1;
     }
-    v8::Context::Scope context_scope(context);
+    Context::Scope context_scope(context);
     RunShell(context, platform.get());
   }
   isolate->Dispose();
-  v8::V8::Dispose();
-  v8::V8::ShutdownPlatform();
+  V8::Dispose();
+  V8::ShutdownPlatform();
   delete create_params.array_buffer_allocator;
   return 0;
 }
 
 // Creates a new execution environment containing the built-in
 // functions.
-v8::Local<v8::Context> CreateShellContext(v8::Isolate *isolate) {
+Local<Context> CreateShellContext(Isolate *isolate) {
   // Create a template for the global object.
-  v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+  Local<ObjectTemplate> global = ObjectTemplate::New(isolate);
 
   // Bind the global 'print' function to the C++ Print callback.
   global->Set(
-      v8::String::NewFromUtf8(isolate, "print", v8::NewStringType::kNormal)
+      String::NewFromUtf8(isolate, "print", NewStringType::kNormal)
           .ToLocalChecked(),
-      v8::FunctionTemplate::New(isolate, Print));
+      FunctionTemplate::New(isolate, Print));
 
 
   // Bind the global 'load' function to the C++ Load callback.
-  global->Set(v8::String::NewFromUtf8(
-      isolate, "load", v8::NewStringType::kNormal).ToLocalChecked(),
-              v8::FunctionTemplate::New(isolate, Load));
+  global->Set(String::NewFromUtf8(
+      isolate, "load", NewStringType::kNormal).ToLocalChecked(),
+              FunctionTemplate::New(isolate, Load));
 
 
   // Bind the 'quit' function
-  global->Set(v8::String::NewFromUtf8(
-      isolate, "quit", v8::NewStringType::kNormal).ToLocalChecked(),
-              v8::FunctionTemplate::New(isolate, Quit));
+  global->Set(String::NewFromUtf8(
+      isolate, "quit", NewStringType::kNormal).ToLocalChecked(),
+              FunctionTemplate::New(isolate, Quit));
 
   // Bind the 'version' variable
-  global->SetAccessor(v8::String::NewFromUtf8(isolate, "version").ToLocalChecked(), VersionGetter, VersionSetter);
+  global->SetAccessor(String::NewFromUtf8(isolate, "version").ToLocalChecked(), VersionGetter, VersionSetter);
 
   /* Binding the Point Class */
+  /* 这个版本是可以支持在命令行上新建无数个Point类，并对类进行一些操作*/
   //create a pointer to a class template
-  v8::Handle<v8::FunctionTemplate> point_templ = v8::FunctionTemplate::New(isolate, constructPoint);
+  Handle<FunctionTemplate> point_templ = FunctionTemplate::New(isolate, constructPoint);
 
   //assign the "Point" name to the new class template
-  point_templ->SetClassName(v8::String::NewFromUtf8(isolate, "Point").ToLocalChecked());
+//  point_templ->SetClassName(String::NewFromUtf8(isolate, "Point").ToLocalChecked());
 
-  global->Set(v8::String::NewFromUtf8(
-      isolate, "Point", v8::NewStringType::kNormal).ToLocalChecked(), point_templ);
+  // 挂载Point类到全局对象中，保证可用
+  global->Set(String::NewFromUtf8(
+      isolate, "Point", NewStringType::kNormal).ToLocalChecked(), point_templ);
 
-  //access the class template
-  v8::Handle<v8::ObjectTemplate> point_proto = point_templ->PrototypeTemplate();
+  //初始化原型模板
+  Handle<ObjectTemplate> point_proto = point_templ->PrototypeTemplate();
 
-  point_proto->Set(v8::String::NewFromUtf8(
-      isolate, "multi", v8::NewStringType::kNormal).ToLocalChecked(), v8::FunctionTemplate::New(isolate, PointMulti));
+  // 原型模板上挂载multi方法
+  point_proto->Set(String::NewFromUtf8(
+      isolate, "multi", NewStringType::kNormal).ToLocalChecked(), FunctionTemplate::New(isolate, PointMulti));
 
-  //access the instance pointer of our new class template
-  v8::Handle<v8::ObjectTemplate> point_inst = point_templ->InstanceTemplate();
+  // 初始化实例模板
+  Handle<ObjectTemplate> point_inst = point_templ->InstanceTemplate();
 
   //set the internal fields of the class as we have the Point class internally
   point_inst->SetInternalFieldCount(1);
 
-  //associates the name "x" with its Get/Set functions
-  point_inst->SetAccessor(v8::String::NewFromUtf8(isolate, "x").ToLocalChecked(), GetPointX, SetPointX);
+  //associates the name "x"/"y" with its Get/Set functions
+  point_inst->SetAccessor(String::NewFromUtf8(isolate, "x").ToLocalChecked(), GetPointX, SetPointX);
+  point_inst->SetAccessor(String::NewFromUtf8(isolate, "y").ToLocalChecked(), GetPointY, SetPointY);
 
-  const v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
+  // 给访问x设置一个拦截器吧
+  point_inst->SetHandler(NamedPropertyHandlerConfiguration(PointInterceptorGetter, PointInterceptorSetter));
+
+  /* Binding Point class ending*/
+
+  const Local<Context> context = Context::New(isolate, NULL, global);
 #ifdef USING_ADVANCED_GUIDE
   /* 这个版本是依据Advanced guide 写的，不过只能提供该变量在Js端的使用，不能新建class*/
-  v8::Local<v8::ObjectTemplate> point_templ = v8::ObjectTemplate::New(isolate);
+  Local<ObjectTemplate> point_templ = ObjectTemplate::New(isolate);
   point_templ->SetInternalFieldCount(1);
-  point_templ->SetAccessor(v8::String::NewFromUtf8(isolate, "x").ToLocalChecked(), GetPointX, SetPointX);
-  point_templ->SetAccessor(v8::String::NewFromUtf8(isolate, "y").ToLocalChecked(), GetPointY, SetPointY);
+  point_templ->SetAccessor(String::NewFromUtf8(isolate, "x").ToLocalChecked(), GetPointX, SetPointX);
+  point_templ->SetAccessor(String::NewFromUtf8(isolate, "y").ToLocalChecked(), GetPointY, SetPointY);
   Point* p = new Point(11, 22);
-  v8::Local<v8::Object> obj = point_templ->NewInstance(context).ToLocalChecked();
-  obj->SetInternalField(0, v8::External::New(isolate, p));
-  context->Global()->Set(context, v8::String::NewFromUtf8(isolate, "p").ToLocalChecked(), obj).ToChecked();
+  Local<Object> obj = point_templ->NewInstance(context).ToLocalChecked();
+  obj->SetInternalField(0, External::New(isolate, p));
+  context->Global()->Set(context, String::NewFromUtf8(isolate, "p").ToLocalChecked(), obj).ToChecked();
 #endif
   return context;
 }

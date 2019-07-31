@@ -17,6 +17,7 @@ set(SOURCE_FILES
         ./helloworld.cc)
 set(CALC_SOURCE
         ./shell/shell.cpp
+        ./shell/interceptor.cpp
         ./shell/exposeToJsFuncs.cpp
         ./shell/exposeToJsVar.cpp
         ./shell/shell_util.cpp)

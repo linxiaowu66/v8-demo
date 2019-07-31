@@ -8,25 +8,38 @@
 
 #include "./shell.h"
 
-extern const char *ToCString(const v8::String::Utf8Value &value);
-extern bool ExecuteString(v8::Isolate *isolate, v8::Local<v8::String> source,
-                          v8::Local<v8::Value> name, bool print_result,
+using v8::HandleScope;
+using v8::Isolate;
+using v8::Local;
+using v8::Name;
+using v8::String;
+using v8::MaybeLocal;
+using v8::FunctionCallbackInfo;
+using v8::NewStringType;
+using v8::EscapableHandleScope;
+using v8::External;
+using v8::Object;
+using v8::Value;
+
+extern const char *ToCString(const String::Utf8Value &value);
+extern bool ExecuteString(Isolate *isolate, Local<String> source,
+                          Local<Value> name, bool print_result,
                           bool report_exceptions);
-extern v8::MaybeLocal<v8::String> ReadFile(v8::Isolate *isolate, const char *name);
+extern MaybeLocal<String> ReadFile(Isolate *isolate, const char *name);
 
 // The callback that is invoked by v8 whenever the JavaScript 'print'
 // function is called.  Prints its arguments on stdout separated by
 // spaces and ending with a newline.
-void Print(const v8::FunctionCallbackInfo <v8::Value> &args) {
+void Print(const FunctionCallbackInfo <Value> &args) {
   bool first = true;
   for (int i = 0; i < args.Length(); i++) {
-    v8::HandleScope handle_scope(args.GetIsolate());
+    HandleScope handle_scope(args.GetIsolate());
     if (first) {
       first = false;
     } else {
       printf(" ");
     }
-    v8::String::Utf8Value str(args.GetIsolate(), args[i]);
+    String::Utf8Value str(args.GetIsolate(), args[i]);
     const char *cstr = ToCString(str);
     printf("%s", cstr);
   }
@@ -37,27 +50,27 @@ void Print(const v8::FunctionCallbackInfo <v8::Value> &args) {
 // The callback that is invoked by v8 whenever the JavaScript 'load'
 // function is called.  Loads, compiles and executes its argument
 // JavaScript file.
-void Load(const v8::FunctionCallbackInfo <v8::Value> &args) {
+void Load(const FunctionCallbackInfo <Value> &args) {
   for (int i = 0; i < args.Length(); i++) {
-    v8::HandleScope handle_scope(args.GetIsolate());
-    v8::String::Utf8Value file(args.GetIsolate(), args[i]);
+    HandleScope handle_scope(args.GetIsolate());
+    String::Utf8Value file(args.GetIsolate(), args[i]);
     if (*file == NULL) {
       args.GetIsolate()->ThrowException(
-          v8::String::NewFromUtf8(args.GetIsolate(), "Error loading file",
-                                  v8::NewStringType::kNormal).ToLocalChecked());
+          String::NewFromUtf8(args.GetIsolate(), "Error loading file",
+                                  NewStringType::kNormal).ToLocalChecked());
       return;
     }
-    v8::Local <v8::String> source;
+    Local <String> source;
     if (!ReadFile(args.GetIsolate(), *file).ToLocal(&source)) {
       args.GetIsolate()->ThrowException(
-          v8::String::NewFromUtf8(args.GetIsolate(), "Error loading file",
-                                  v8::NewStringType::kNormal).ToLocalChecked());
+          String::NewFromUtf8(args.GetIsolate(), "Error loading file",
+                                  NewStringType::kNormal).ToLocalChecked());
       return;
     }
     if (!ExecuteString(args.GetIsolate(), source, args[i], false, false)) {
       args.GetIsolate()->ThrowException(
-          v8::String::NewFromUtf8(args.GetIsolate(), "Error executing file",
-                                  v8::NewStringType::kNormal).ToLocalChecked());
+          String::NewFromUtf8(args.GetIsolate(), "Error executing file",
+                                  NewStringType::kNormal).ToLocalChecked());
       return;
     }
   }
@@ -66,7 +79,7 @@ void Load(const v8::FunctionCallbackInfo <v8::Value> &args) {
 
 // The callback that is invoked by v8 whenever the JavaScript 'quit'
 // function is called.  Quits.
-void Quit(const v8::FunctionCallbackInfo <v8::Value> &args) {
+void Quit(const FunctionCallbackInfo <Value> &args) {
   // If not arguments are given args[0] will yield undefined which
   // converts to the integer value 0.
   int exit_code =
@@ -76,10 +89,10 @@ void Quit(const v8::FunctionCallbackInfo <v8::Value> &args) {
   exit(exit_code);
 }
 
-void constructPoint(const v8::FunctionCallbackInfo <v8::Value> &args) {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+void constructPoint(const FunctionCallbackInfo <Value> &args) {
+  Isolate* isolate = Isolate::GetCurrent();
   //start a handle scope
-  v8::EscapableHandleScope handle_scope(isolate);
+  EscapableHandleScope handle_scope(isolate);
 
   //get an x and y
   double x = args[0]->NumberValue(isolate->GetCurrentContext()).ToChecked();
@@ -88,17 +101,17 @@ void constructPoint(const v8::FunctionCallbackInfo <v8::Value> &args) {
   //generate a new point
   Point *point = new Point(x, y);
 
-  args.This()->SetInternalField(0, v8::External::New(isolate, point));
+  args.This()->SetInternalField(0, External::New(isolate, point));
 }
 
-void PointMulti(const v8::FunctionCallbackInfo <v8::Value> &args) {
-  v8::Isolate* isolate = v8::Isolate::GetCurrent();
+void PointMulti(const FunctionCallbackInfo <Value> &args) {
+  Isolate* isolate = Isolate::GetCurrent();
   //start a handle scope
-  v8::EscapableHandleScope handle_scope(isolate);
+  EscapableHandleScope handle_scope(isolate);
 
 
-  v8::Local<v8::Object> self = args.Holder();
-  v8::Local<v8::External> wrap = v8::Local<v8::External>::Cast(self->GetInternalField(0));
+  Local<Object> self = args.Holder();
+  Local<External> wrap = Local<External>::Cast(self->GetInternalField(0));
   void* ptr = wrap->Value();
   int value = static_cast<Point*>(ptr)->multi();
 
