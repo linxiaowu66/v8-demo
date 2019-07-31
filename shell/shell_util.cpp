@@ -6,6 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "./shell.h"
+
 // Extracts a C string from a V8 Utf8Value.
 const char* ToCString(const v8::String::Utf8Value& value) {
     return *value ? *value : "<string conversion failed>";
@@ -88,4 +90,53 @@ bool ExecuteString(v8::Isolate* isolate, v8::Local<v8::String> source,
             return true;
         }
     }
+}
+
+// Reads a file into a v8 string.
+v8::MaybeLocal<v8::String> ReadFile(v8::Isolate *isolate, const char *name) {
+  FILE *file = fopen(name, "rb");
+  if (file == NULL) return v8::MaybeLocal<v8::String>();
+  fseek(file, 0, SEEK_END);
+  size_t size = ftell(file);
+  rewind(file);
+  char *chars = new char[size + 1];
+  chars[size] = '\0';
+  for (size_t i = 0; i < size;) {
+    i += fread(&chars[i], 1, size - i, file);
+    if (ferror(file)) {
+      fclose(file);
+      return v8::MaybeLocal<v8::String>();
+    }
+  }
+  fclose(file);
+  v8::MaybeLocal<v8::String> result = v8::String::NewFromUtf8(
+      isolate, chars, v8::NewStringType::kNormal, static_cast<int>(size));
+  delete[] chars;
+  return result;
+}
+
+// The read-eval-execute loop of the shell.
+void RunShell(v8::Local<v8::Context> context, v8::Platform *platform) {
+  fprintf(stderr, "V8 version %s [sample shell]\n", v8::V8::GetVersion());
+  static const int kBufferSize = 256;
+  // Enter the execution environment before evaluating any code.
+  v8::Context::Scope context_scope(context);
+  v8::Local<v8::String> name(
+      v8::String::NewFromUtf8(context->GetIsolate(), "(shell)",
+                              v8::NewStringType::kNormal).ToLocalChecked());
+  while (true) {
+    char buffer[kBufferSize];
+    fprintf(stderr, "> ");
+    char *str = fgets(buffer, kBufferSize, stdin);
+    if (str == NULL) break;
+    v8::HandleScope handle_scope(context->GetIsolate());
+    ExecuteString(
+        context->GetIsolate(),
+        v8::String::NewFromUtf8(context->GetIsolate(), str,
+                                v8::NewStringType::kNormal).ToLocalChecked(),
+        name, true, true);
+    while (v8::platform::PumpMessageLoop(platform, context->GetIsolate()))
+      continue;
+  }
+  fprintf(stderr, "\n");
 }

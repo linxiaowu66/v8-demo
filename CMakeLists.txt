@@ -17,6 +17,8 @@ set(SOURCE_FILES
         ./helloworld.cc)
 set(CALC_SOURCE
         ./shell/shell.cpp
+        ./shell/exposeToJsFuncs.cpp
+        ./shell/exposeToJsVar.cpp
         ./shell/shell_util.cpp)
 add_executable(HelloWorld ${SOURCE_FILES})
-add_executable(Calculator ${CALC_SOURCE})
+add_executable(Shell ${CALC_SOURCE})
