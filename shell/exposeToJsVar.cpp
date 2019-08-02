@@ -14,8 +14,6 @@ extern const char *ToCString(const String::Utf8Value &value);
 void VersionGetter(Local<String> property,
                    const PropertyCallbackInfo<Value> &info) {
   info.GetReturnValue().Set(String::NewFromUtf8(info.GetIsolate(), version).ToLocalChecked());
-
-  v8::Integer::New(info.GetIsolate(), 10);
 }
 
 void

@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
 // Creates a new execution environment containing the built-in
 // functions.
 Local<Context> CreateShellContext(Isolate *isolate) {
-  
+
   // 为全局对象创建一个模板
   Local<ObjectTemplate> global = ObjectTemplate::New(isolate);
 
