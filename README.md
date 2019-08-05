@@ -35,4 +35,4 @@ link_libraries(
 )
 ```
 
-更多细节请参考我的博客： [v8高级进阶实战]()
+更多细节请参考我的博客： [如何正确地使用v8嵌入到我们的C++应用中](https://blog.5udou.cn/blog/Ru-He-Zheng-Que-Di-Shi-Yong-v8Qian-Ru-Dao-Wo-Men-De-CYing-Yong-Zhong-19)

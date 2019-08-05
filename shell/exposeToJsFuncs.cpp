@@ -91,8 +91,6 @@ void Quit(const FunctionCallbackInfo <Value> &args) {
 
 void constructPoint(const FunctionCallbackInfo <Value> &args) {
   Isolate* isolate = Isolate::GetCurrent();
-  //start a handle scope
-  EscapableHandleScope handle_scope(isolate);
 
   //get an x and y
   double x = args[0]->NumberValue(isolate->GetCurrentContext()).ToChecked();
@@ -107,12 +105,14 @@ void constructPoint(const FunctionCallbackInfo <Value> &args) {
 void PointMulti(const FunctionCallbackInfo <Value> &args) {
   Isolate* isolate = Isolate::GetCurrent();
   //start a handle scope
-  EscapableHandleScope handle_scope(isolate);
+  HandleScope handle_scope(isolate);
 
 
   Local<Object> self = args.Holder();
   Local<External> wrap = Local<External>::Cast(self->GetInternalField(0));
   void* ptr = wrap->Value();
+
+  // 这里直接调用已经实例化的Point类的成员方法multi，并拿到结果
   int value = static_cast<Point*>(ptr)->multi();
 
   args.GetReturnValue().Set(value);
