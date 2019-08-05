@@ -9,6 +9,7 @@ using v8::External;
 using v8::Object;
 using v8::Value;
 
+extern char version[100];
 extern const char *ToCString(const String::Utf8Value &value);
 
 void VersionGetter(Local<String> property,

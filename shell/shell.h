@@ -5,8 +5,6 @@
 #ifndef V8DEMO_SHELL_H
 #define V8DEMO_SHELL_H
 
-static char version[100] = "";
-
 class Point {
 public:
   Point(int x, int y) : x_(x), y_(y) { }

@@ -9,7 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "shell.h"
+
+char version[100];
 
 using v8::Context;
 using v8::External;
